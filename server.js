@@ -9,7 +9,7 @@ const exerciseRoutes = require("./routes/exercise");
 const seedRoutes = require("./routes/seed");
 const mealRoutes = require("./routes/meal");
 const chatRoutes = require("./routes/chat");
-
+// const userRoutes = require("./routes/user");
 const app = express();
 
 // Middleware
@@ -23,6 +23,7 @@ app.use("/api/exercise", exerciseRoutes);
 app.use("/api/seed", seedRoutes);
 app.use("/api/meal", mealRoutes);
 app.use("/api/chat", chatRoutes);
+// app.use("/api/user", userRoutes);
 
 // Connect to MongoDB
 mongoose
