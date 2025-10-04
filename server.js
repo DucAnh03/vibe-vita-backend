@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const bookingRoutes = require("./routes/booking");
 require("dotenv").config();
 
 const authRoutes = require("./routes/auth");
@@ -9,7 +10,7 @@ const exerciseRoutes = require("./routes/exercise");
 const seedRoutes = require("./routes/seed");
 const mealRoutes = require("./routes/meal");
 const chatRoutes = require("./routes/chat");
-// const userRoutes = require("./routes/user");
+const trainerRoutes = require("./routes/trainer");
 const app = express();
 
 // Middleware
@@ -23,8 +24,8 @@ app.use("/api/exercise", exerciseRoutes);
 app.use("/api/seed", seedRoutes);
 app.use("/api/meal", mealRoutes);
 app.use("/api/chat", chatRoutes);
-// app.use("/api/user", userRoutes);
-
+app.use("/api/booking", bookingRoutes);
+app.use("/api/trainers", trainerRoutes);
 // Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI)

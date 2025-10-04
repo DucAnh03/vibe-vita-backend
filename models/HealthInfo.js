@@ -26,12 +26,12 @@ const healthInfoSchema = new mongoose.Schema({
   },
   bmi: {
     type: Number,
-    required: true,
+    default: 0, // ✅ có giá trị mặc định
   },
   bmiCategory: {
     type: String,
     enum: ["Thiếu cân", "Bình thường", "Thừa cân", "Béo phì"],
-    required: true,
+    default: "Bình thường", // ✅ mặc định để không bị null
   },
   createdAt: {
     type: Date,
@@ -45,13 +45,11 @@ const healthInfoSchema = new mongoose.Schema({
 
 // Tính BMI trước khi lưu
 healthInfoSchema.pre("save", function (next) {
-  if (this.isModified("height") || this.isModified("weight")) {
-    // Tính BMI: weight(kg) / height(m)^2
+  if (this.height && this.weight) {
     this.bmi = parseFloat(
       (this.weight / Math.pow(this.height / 100, 2)).toFixed(1)
     );
 
-    // Phân loại BMI
     if (this.bmi < 18.5) {
       this.bmiCategory = "Thiếu cân";
     } else if (this.bmi >= 18.5 && this.bmi < 25) {
@@ -62,6 +60,7 @@ healthInfoSchema.pre("save", function (next) {
       this.bmiCategory = "Béo phì";
     }
   }
+  this.updatedAt = new Date();
   next();
 });
 

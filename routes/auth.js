@@ -113,7 +113,15 @@ router.get("/me", authenticate, async (req, res) => {
 router.get("/admin", authenticate, authorize("admin"), async (req, res) => {
   res.json({ message: "Đây là route dành cho admin" });
 });
-
+// Route cho pt
+router.get("/trainers", async (req, res) => {
+  try {
+    const trainers = await User.find({ role: "pt" }).select("-password");
+    res.json(trainers);
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+});
 // Route cho PT và admin
 router.get("/pt", authenticate, authorize("pt", "admin"), async (req, res) => {
   res.json({ message: "Đây là route dành cho PT và admin" });
@@ -206,5 +214,37 @@ router.put("/profile", authenticate, async (req, res) => {
     });
   }
 });
+// Cập nhật profile PT
+router.put(
+  "/trainer/profile",
+  authenticate,
+  authorize("pt", "admin"),
+  async (req, res) => {
+    try {
+      const { specialty, experience, price, location, description } = req.body;
+      const userId = req.user._id;
+
+      const updateData = {};
+      if (specialty) updateData.specialty = specialty;
+      if (experience) updateData.experience = experience;
+      if (price) updateData.price = price;
+      if (location) updateData.location = location;
+      if (description) updateData.description = description;
+
+      const updatedTrainer = await User.findByIdAndUpdate(userId, updateData, {
+        new: true,
+        runValidators: true,
+      }).select("-password");
+
+      res.json({
+        message: "Cập nhật profile PT thành công",
+        trainer: updatedTrainer,
+      });
+    } catch (error) {
+      console.error("Update trainer profile error:", error);
+      res.status(500).json({ message: "Lỗi server", error: error.message });
+    }
+  }
+);
 
 module.exports = router;
