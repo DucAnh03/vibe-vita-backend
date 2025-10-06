@@ -11,12 +11,15 @@ const seedRoutes = require("./routes/seed");
 const mealRoutes = require("./routes/meal");
 const chatRoutes = require("./routes/chat");
 const trainerRoutes = require("./routes/trainer");
+const paymentRoutes = require("./routes/payment");
 const app = express();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-
+app.get("/", (req, res) => {
+  res.send("🚀 Server Trainer API đang hoạt động!");
+});
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/health", healthRoutes);
@@ -26,6 +29,7 @@ app.use("/api/meal", mealRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/booking", bookingRoutes);
 app.use("/api/trainers", trainerRoutes);
+app.use("/api/payment", paymentRoutes);
 // Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI)

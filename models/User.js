@@ -93,12 +93,25 @@ const userSchema = new mongoose.Schema({
   // ==========================
   // Các field riêng cho PT
   // ==========================
-  specialty: { type: String }, // Chuyên môn (Yoga, Gym…)
-  experience: { type: String }, // Kinh nghiệm (ví dụ: "5 năm")
-  price: { type: String }, // Giá buổi tập
-  location: { type: String }, // Địa chỉ tập
-  description: { type: String }, // Mô tả chi tiết về PT
-  rating: { type: Number, default: 0 }, // Điểm đánh giá mặc định 0
+  specialty: { type: String, default: "" }, // Chuyên môn (Yoga, Gym…)
+  experience: { type: String, default: "" }, // Kinh nghiệm (VD: "5 năm kinh nghiệm")
+  location: { type: String, default: "" }, // Địa chỉ tập luyện
+  gender: { type: String, default: "" }, // Giới tính
+  description: { type: String, default: "" }, // Mô tả chi tiết về PT
+  image: {
+    type: String,
+    default: "https://cdn-icons-png.flaticon.com/512/149/149071.png",
+  }, // Ảnh đại diện mặc định
+
+  // ✅ Giá theo 3 gói tập
+  prices: {
+    oneSession: { type: Number, default: 0 }, // Giá 1 buổi
+    threeToSeven: { type: Number, default: 0 }, // Giá 3–7 buổi
+    monthly: { type: Number, default: 0 }, // Giá theo tháng
+  },
+
+  // ✅ Điểm đánh giá trung bình
+  rating: { type: Number, default: 0 },
 
   createdAt: {
     type: Date,
