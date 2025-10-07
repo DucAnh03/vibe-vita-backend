@@ -30,6 +30,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/booking", bookingRoutes);
 app.use("/api/trainers", trainerRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/uploads", express.static("uploads"));
 // Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI)

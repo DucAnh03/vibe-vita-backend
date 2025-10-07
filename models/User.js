@@ -1,96 +1,43 @@
-// const mongoose = require("mongoose");
-// const bcrypt = require("bcryptjs");
-
-// const userSchema = new mongoose.Schema({
-//   username: {
-//     type: String,
-//     required: true,
-//   },
-//   email: {
-//     type: String,
-//     required: true,
-//     unique: true,
-//     lowercase: true,
-//     trim: true,
-//   },
-//   password: {
-//     type: String,
-//     required: true,
-//     minlength: 6,
-//   },
-//   phone: {
-//     type: String,
-//     required: false,
-//     unique: false,
-//     trim: true,
-//     match: [/^[0-9]{10,11}$/, "Số điện thoại không hợp lệ"],
-//   },
-//   dateOfBirth: {
-//     type: Date,
-//     required: false,
-//   },
-//   role: {
-//     type: String,
-//     enum: ["user", "pt", "admin"],
-//     default: "user",
-//   },
-//   createdAt: {
-//     type: Date,
-//     default: Date.now,
-//   },
-// });
-
-// // Hash password trước khi lưu
-// userSchema.pre("save", async function (next) {
-//   if (!this.isModified("password")) return next();
-//   this.password = await bcrypt.hash(this.password, 10);
-//   next();
-// });
-
-// // So sánh password
-// userSchema.methods.comparePassword = async function (candidatePassword) {
-//   return await bcrypt.compare(candidatePassword, this.password);
-// };
-
-// module.exports = mongoose.model("User", userSchema);
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
 const userSchema = new mongoose.Schema(
   {
-    username: { type: String, required: false },
-    name: { type: String },
+    username: { type: String },
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
     phone: { type: String },
     dateOfBirth: { type: Date },
 
+    // 🖼 Ảnh đại diện
+    image: { type: String, default: "" },
+
     // 🎯 Vai trò
     role: {
       type: String,
-      enum: ["user", "pt", "admin"], // ✅ giữ nguyên "pt"
+      enum: ["user", "pt", "admin"],
       default: "user",
     },
 
-    // 💪 Thông tin dành cho PT
+    // 💪 Thông tin PT (nếu có)
     specialty: { type: String },
     experience: { type: String },
     location: { type: String },
     description: { type: String },
-    image: { type: String },
     prices: {
       oneSession: { type: Number, default: 0 },
       threeToSeven: { type: Number, default: 0 },
       monthly: { type: Number, default: 0 },
     },
-    // 💎 Premium (dành cho user)
+
+    // 💎 Premium
     isPremium: { type: Boolean, default: false },
     premiumExpiredAt: { type: Date },
   },
   { timestamps: true }
 );
 
-// 🔐 Hash password
+// 🔐 Hash mật khẩu
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   const salt = await bcrypt.genSalt(10);
@@ -98,19 +45,19 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
-// ✅ So sánh mật khẩu
+// 🔑 So sánh mật khẩu
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// ✅ Kiểm tra premium còn hạn không
+// 💎 Kiểm tra premium còn hạn
 userSchema.methods.isActivePremium = function () {
   if (!this.isPremium) return false;
   if (!this.premiumExpiredAt) return false;
   return new Date() < this.premiumExpiredAt;
 };
 
-// ✅ Virtual tính số ngày premium còn lại
+// 📅 Virtual: số ngày premium còn lại
 userSchema.virtual("premiumDaysLeft").get(function () {
   if (!this.isActivePremium()) return 0;
   const now = new Date();

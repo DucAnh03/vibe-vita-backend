@@ -10,7 +10,7 @@ const healthInfoSchema = new mongoose.Schema({
   gender: {
     type: String,
     required: true,
-    enum: ["male", "female", "other"],
+    enum: ["Nam", "Nữ", "Khác"],
   },
   height: {
     type: Number,
