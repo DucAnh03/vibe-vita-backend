@@ -83,6 +83,9 @@ router.put("/profile/update", authenticate, async (req, res) => {
 
     // ✅ Gán giá theo từng loại nếu có
     if (req.body.prices) {
+      // Nếu chưa có prices, khởi tạo object rỗng
+      if (!trainer.prices) trainer.prices = {};
+
       trainer.prices.oneSession =
         req.body.prices.oneSession ?? trainer.prices.oneSession;
       trainer.prices.threeToSeven =

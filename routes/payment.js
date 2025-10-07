@@ -1,152 +1,352 @@
-// D:\EXE201\vibe-vita-backend\routes\payment.js
 const express = require("express");
 const router = express.Router();
+require("dotenv").config();
+
 const { authenticate } = require("../middleware/auth");
 const Payment = require("../models/Payment");
-const payos = require("../untils/payos"); // ✅ đã export instance
+const User = require("../models/User");
+const { PayOS } = require("@payos/node");
 
+// ---------------------------
+// 🔧 Khởi tạo PayOS SDK
+// ---------------------------
+const payos = new PayOS({
+  clientId: process.env.PAYOS_CLIENT_ID,
+  apiKey: process.env.PAYOS_API_KEY,
+  checksumKey: process.env.PAYOS_CHECKSUM_KEY,
+});
+
+// ---------------------------
+// ⚙️ Hàm tính ngày hết hạn gói
+// ---------------------------
+const calculateExpiredDate = (packageType) => {
+  const now = new Date();
+  switch (packageType) {
+    case "oneDay":
+      return new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
+    case "threeToSevenDays":
+      return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    case "monthly":
+      return new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    default:
+      return new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
+  }
+};
+
+// ---------------------------
+// 🧪 Test router
+// ---------------------------
+router.get("/ping", (req, res) => {
+  res.json({ ok: true, scope: "payment-router", ts: Date.now() });
+});
+
+// ---------------------------
+// 💳 API tạo link thanh toán PayOS
+// ---------------------------
 router.post("/create", authenticate, async (req, res) => {
   try {
-    const { packageType } = req.body;
-    const userId = req.user.id;
+    const { amount, packageType, orderCode } = req.body;
 
-    // 💰 Bảng giá cố định
-    const packagePrices = {
-      oneDay: 300000,
-      threeToSevenDays: 1800000,
-      monthly: 4500000,
-    };
-
-    const amount = packagePrices[packageType];
-    if (!amount)
-      return res.status(400).json({ message: "Gói thanh toán không hợp lệ" });
-
-    // 🕒 Ngày hết hạn
-    let expiredAt;
-    if (packageType === "oneDay")
-      expiredAt = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000);
-    else if (packageType === "threeToSevenDays")
-      expiredAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    else if (packageType === "monthly")
-      expiredAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-    // 🧾 orderCode phải là số nguyên dương 6 chữ số
-    const orderId = Math.floor(100000 + Math.random() * 900000);
-    console.log("🚀 Bắt đầu tạo thanh toán với orderCode:", orderId);
-
-    // ✅ Gọi PayOS SDK - Dùng createPaymentLinkUrl() (bản 2.0.3)
-    const paymentLink = await payos.createPaymentLinkUrl({
-      orderCode: orderId,
-      amount,
-      description: `Thanh toán gói thuê PT (${packageType})`,
-      cancelUrl: process.env.PAYOS_CANCEL_URL,
-      returnUrl: process.env.PAYOS_RETURN_URL,
-      items: [
-        {
-          name: `Gói thuê PT (${packageType})`,
-          quantity: 1,
-          price: amount,
-        },
-      ],
-      buyer: {
-        name: req.user?.username || "Khách hàng",
-        email: req.user?.email || "no-reply@vibevita.com",
-        phone: req.user?.phone || "0123456789",
-      },
-    });
-
-    console.log("✅ PayOS trả về:", paymentLink);
-
-    // ✅ Lưu DB (trạng thái pending)
-    const newPayment = new Payment({
-      userId,
-      packageType,
-      amount,
-      status: "pending",
-      transactionId: orderId,
-      expiredAt,
-    });
-    await newPayment.save();
-
-    res.status(200).json({
-      message: "✅ Tạo link thanh toán thành công",
-      url: paymentLink.checkoutUrl,
-    });
-  } catch (err) {
-    console.error("❌ Lỗi tạo thanh toán:", err);
-    res.status(500).json({
-      message: "❌ Lỗi tạo thanh toán",
-      error: err.message,
-    });
-  }
-});
-
-// ================================
-// 🔄 2️⃣ WEBHOOK PAYOS (CẬP NHẬT TRẠNG THÁI)
-// ================================
-router.post("/webhook", async (req, res) => {
-  try {
-    const { orderCode, status } = req.body.data || {};
-
-    if (status === "PAID") {
-      const payment = await Payment.findOneAndUpdate(
-        { transactionId: orderCode },
-        { status: "success" },
-        { new: true }
-      );
-      console.log("✅ Thanh toán thành công:", payment);
+    if (!["oneDay", "threeToSevenDays", "monthly"].includes(packageType)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid package type" });
     }
 
-    res.status(200).json({ message: "Webhook received" });
+    const code =
+      Number.isInteger(orderCode) && orderCode > 0
+        ? orderCode
+        : Math.floor(Date.now() / 1000);
+
+    const amt = Number(amount);
+    if (!amt || amt <= 0)
+      return res
+        .status(400)
+        .json({ success: false, message: "Amount phải lớn hơn 0" });
+
+    const packageNames = {
+      oneDay: "Gói 1 Ngày",
+      threeToSevenDays: "Gói 7 Ngày",
+      monthly: "Gói 1 Tháng",
+    };
+    const description = `VibeVita - ${packageNames[packageType]}`;
+
+    const payload = {
+      orderCode: code,
+      amount: amt,
+      description,
+      returnUrl: process.env.PAYOS_RETURN_URL,
+      cancelUrl: process.env.PAYOS_CANCEL_URL,
+      items: [{ name: packageNames[packageType], quantity: 1, price: amt }],
+      buyerName: req.user?.name || "Khách hàng",
+      buyerEmail: req.user?.email,
+      buyerPhone: req.user?.phone,
+    };
+
+    console.log("📤 Creating payment with payload:", payload);
+
+    const response = await payos.paymentRequests.create(payload);
+    console.log("✅ PayOS response:", response);
+
+    const expiredAt = calculateExpiredDate(packageType);
+
+    await Payment.create({
+      userId: req.user._id,
+      packageType,
+      orderCode: code,
+      amount: amt,
+      description,
+      status: "pending",
+      paymentLinkId: response.paymentLinkId,
+      checkoutUrl: response.checkoutUrl,
+      expiredAt,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Payment link created successfully",
+      data: {
+        orderCode: code,
+        checkoutUrl: response.checkoutUrl,
+        amount: amt,
+        packageType,
+        expiredAt,
+      },
+    });
   } catch (err) {
-    console.error("❌ Lỗi webhook:", err.message);
+    console.error("❌ Create payment error:", err?.response?.data || err);
     res.status(500).json({
-      message: "Lỗi xử lý webhook",
-      error: err.message,
+      success: false,
+      message:
+        err?.response?.data?.message || err?.message || "Create payment failed",
     });
   }
 });
 
-// ================================
-// 🔍 3️⃣ KIỂM TRA GÓI HỢP LỆ
-// ================================
-router.get("/status", authenticate, async (req, res) => {
+// ---------------------------
+// 🪝 Webhook PayOS (xử lý PAID ngay)
+// ---------------------------
+router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
   try {
-    const now = new Date();
+    if (!req.body || !req.body.length) {
+      console.log("📩 Webhook test received");
+      return res.status(200).json({ message: "Webhook test OK" });
+    }
+
+    let data;
+    try {
+      data = JSON.parse(req.body.toString("utf8"));
+    } catch (e) {
+      console.warn("⚠️ Webhook body parse fail");
+      return res.status(200).json({ message: "Webhook OK (no JSON)" });
+    }
+
+    console.log("📥 Webhook received:", data);
+    const { orderCode, code, status } = data;
+    if (!orderCode)
+      return res
+        .status(400)
+        .json({ message: "Invalid webhook (no orderCode)" });
+
+    const payment = await Payment.findOne({ orderCode: Number(orderCode) });
+    if (!payment) {
+      console.warn("⚠️ Payment not found:", orderCode);
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    // ✅ Khi thanh toán thành công
+    if (code === "00" || status === "PAID") {
+      payment.status = "completed";
+      payment.paidAt = new Date();
+      await payment.save();
+
+      const user = await User.findById(payment.userId);
+      if (user) {
+        user.isPremium = true;
+        user.premiumExpiredAt = payment.expiredAt;
+        await user.save();
+        console.log(`✅ User ${user._id} đã được nâng cấp Premium`);
+      }
+    } else {
+      payment.status = "failed";
+      await payment.save();
+    }
+
+    console.log("✅ Webhook processed successfully:", orderCode);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("❌ Webhook error:", err);
+    res.status(200).json({ message: "Webhook handled (no crash)" });
+  }
+});
+
+// ---------------------------
+// 🔍 API kiểm tra trạng thái thanh toán
+// ---------------------------
+router.get("/status/:orderCode", authenticate, async (req, res) => {
+  try {
+    const { orderCode } = req.params;
     const payment = await Payment.findOne({
-      userId: req.user.id,
-      status: "success",
-      expiredAt: { $gte: now },
-    }).sort({ createdAt: -1 });
+      orderCode: Number(orderCode),
+      userId: req.user._id,
+    });
 
     if (!payment)
       return res
-        .status(403)
-        .json({ message: "⚠️ Bạn chưa có gói thuê PT hợp lệ." });
+        .status(404)
+        .json({ success: false, message: "Payment not found" });
 
-    res.json({ message: "✅ Đã có gói thuê hợp lệ", payment });
+    const info = await payos.paymentRequests.get(orderCode);
+
+    // ✅ Nếu PayOS báo PAID nhưng DB chưa update → đồng bộ ngay
+    if (info.status === "PAID" && payment.status === "pending") {
+      payment.status = "completed";
+      payment.paidAt = new Date();
+      await payment.save();
+
+      const user = await User.findById(payment.userId);
+      if (user) {
+        user.isPremium = true;
+        user.premiumExpiredAt = payment.expiredAt;
+        await user.save();
+        console.log(`✅ Đồng bộ user ${user._id} Premium`);
+      }
+    }
+
+    res.json({ success: true, data: { payment, payosStatus: info.status } });
   } catch (err) {
-    res.status(500).json({
-      message: "Lỗi kiểm tra thanh toán",
-      error: err.message,
-    });
+    console.error("❌ Get status error:", err);
+    res.status(500).json({ success: false, message: "Failed to get status" });
   }
 });
 
-// ================================
-// 🧾 4️⃣ LỊCH SỬ THANH TOÁN
-// ================================
+// ---------------------------
+// 🧾 Lịch sử thanh toán
+// ---------------------------
 router.get("/history", authenticate, async (req, res) => {
   try {
-    const history = await Payment.find({ userId: req.user.id }).sort({
-      createdAt: -1,
-    });
-    res.json(history);
+    const list = await Payment.find({ userId: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(50);
+    res.json({ success: true, data: list });
   } catch (err) {
-    res.status(500).json({
-      message: "Lỗi lấy lịch sử thanh toán",
-      error: err.message,
+    console.error("❌ Get history error:", err);
+    res.status(500).json({ success: false, message: "Failed to get history" });
+  }
+});
+
+// ---------------------------
+// ❌ Hủy thanh toán
+// ---------------------------
+router.post("/cancel/:orderCode", authenticate, async (req, res) => {
+  try {
+    const { orderCode } = req.params;
+    const { cancellationReason } = req.body;
+
+    await payos.paymentRequests.cancel(orderCode, {
+      cancellationReason: cancellationReason || "User cancelled",
     });
+
+    const payment = await Payment.findOne({
+      orderCode: Number(orderCode),
+      userId: req.user._id,
+    });
+    if (payment) {
+      payment.status = "cancelled";
+      await payment.save();
+    }
+
+    res.json({ success: true, message: "Payment cancelled successfully" });
+  } catch (err) {
+    console.error("❌ Cancel payment error:", err);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to cancel payment" });
+  }
+  // ==============================================
+  // ✅ CHECK PREMIUM STATUS (cho từng user)
+  // ==============================================
+  const User = require("../models/User");
+
+  router.get("/check-status", authenticate, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const user = await User.findById(userId).select(
+        "username email isPremium premiumExpiredAt"
+      );
+
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User không tồn tại" });
+      }
+
+      // ✅ Tính số ngày còn lại của Premium
+      let daysLeft = 0;
+      if (user.isPremium && user.premiumExpiredAt) {
+        const diff = new Date(user.premiumExpiredAt) - new Date();
+        daysLeft = Math.max(Math.ceil(diff / (1000 * 60 * 60 * 24)), 0);
+      }
+
+      // ✅ Lấy danh sách PT đã thanh toán (lưu trong localStorage frontend)
+      // Ở backend không lưu, nên mình để client tự lưu; backend chỉ cung cấp trạng thái user.
+
+      res.json({
+        success: true,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          isPremium: user.isPremium,
+          premiumExpiredAt: user.premiumExpiredAt,
+          daysLeft,
+        },
+      });
+    } catch (err) {
+      console.error("❌ Lỗi check premium:", err);
+      res
+        .status(500)
+        .json({ success: false, message: "Lỗi server", error: err.message });
+    }
+  });
+});
+// ✅ Check trạng thái Premium
+
+router.get("/check-status", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId).select(
+      "username email isPremium premiumExpiredAt"
+    );
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User không tồn tại" });
+    }
+
+    let daysLeft = 0;
+    if (user.isPremium && user.premiumExpiredAt) {
+      const diff = new Date(user.premiumExpiredAt) - new Date();
+      daysLeft = Math.max(Math.ceil(diff / (1000 * 60 * 60 * 24)), 0);
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        isPremium: user.isPremium,
+        premiumExpiredAt: user.premiumExpiredAt,
+        daysLeft,
+      },
+    });
+  } catch (err) {
+    console.error("❌ Lỗi check premium:", err);
+    res
+      .status(500)
+      .json({ success: false, message: "Lỗi server", error: err.message });
   }
 });
 
