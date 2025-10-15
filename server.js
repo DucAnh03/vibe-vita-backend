@@ -31,14 +31,34 @@ app.use("/api/booking", bookingRoutes);
 app.use("/api/trainers", trainerRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/uploads", express.static("uploads"));
-// Connect to MongoDB
+// // Connect to MongoDB
+// mongoose
+//   .connect(process.env.MONGO_URI)
+//   .then(() => console.log("✅ Đã kết nối MongoDB Atlas"))
+//   .catch((err) => console.error("❌ Lỗi kết nối MongoDB:", err));
+
+// // Start server
+// const PORT = process.env.PORT || 5000;
+// app.listen(PORT, () => {
+//   console.log(`🚀 Server đang chạy trên port ${PORT}`);
+// });
+// app.get("/healthz", (req, res) => {
+//   res.status(200).send("OK");
+// });
+const PORT = process.env.PORT || 5000;
+
+// Start server **ngay lập tức**
+app.listen(PORT, () => {
+  console.log(`🚀 Server đang chạy trên port ${PORT}`);
+});
+
+// Kết nối MongoDB (chạy song song, không chặn Render)
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ Đã kết nối MongoDB Atlas"))
   .catch((err) => console.error("❌ Lỗi kết nối MongoDB:", err));
 
-// Start server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server đang chạy trên port ${PORT}`);
+// Health check
+app.get("/healthz", (req, res) => {
+  res.status(200).send("OK");
 });
