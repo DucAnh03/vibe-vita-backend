@@ -13,9 +13,15 @@ const chatRoutes = require('./routes/chat')
 const trainerRoutes = require('./routes/trainer')
 const paymentRoutes = require('./routes/payment')
 const app = express()
+app.use(
+  cors({
+    origin: ['https://vibe-vita-fontend.vercel.app/', 'http://localhost:5173'],
+    credentials: true
+  })
+)
 
 // Middleware
-app.use(cors())
+// app.use(cors())
 app.use(express.json())
 app.get('/', (req, res) => {
   res.send('🚀 Server Trainer API đang hoạt động!')
@@ -62,3 +68,9 @@ mongoose
 app.get('/healthz', (req, res) => {
   res.status(200).send('OK')
 })
+app.use(
+  cors({
+    origin: ['https://vibe-vita-fontend.vercel.app/', 'http://localhost:5173'],
+    credentials: true
+  })
+)
